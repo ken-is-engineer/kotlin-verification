@@ -26,9 +26,8 @@ private data class VerificationEntry(
 private val verifications = listOf(
     VerificationEntry(
         route = Routes.LIST_STABILITY,
-        title = "List 安定性と MutableList 共有参照",
-        description = "要素が Stable でも List 引数は不安定です。" +
-            "呼び出し元が MutableList を保持していると、渡したあとも外部から変更できます。"
+        title = "List 安定性",
+        description = "Stable な data model の List を渡す。中身は変えず、画面更新だけで ItemList が skip されないことを見る。"
     )
 )
 

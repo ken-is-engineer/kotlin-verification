@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val strongSkippingEnabled = providers.gradleProperty("compose.strongSkipping")
+    .map { it.toBoolean() }
+    .orElse(false)
+
 android {
     namespace = "com.kenisengineer.kotlinverification.feature.liststability"
     compileSdk = 35
@@ -11,6 +15,7 @@ android {
     defaultConfig {
         minSdk = 24
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("boolean", "STRONG_SKIPPING", strongSkippingEnabled.get().toString())
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -21,10 +26,12 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 composeCompiler {
+    enableStrongSkippingMode = strongSkippingEnabled.get()
     reportsDestination = layout.buildDirectory.dir("compose_reports")
     metricsDestination = layout.buildDirectory.dir("compose_metrics")
 }
@@ -38,6 +45,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.foundation)
     implementation(libs.kotlinx.collections.immutable)
     debugImplementation(libs.androidx.ui.tooling)
 }

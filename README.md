@@ -22,7 +22,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 | `:app` | `NavHost` と検証一覧（メイン画面） |
 | `:core:navigation` | Route 定数 |
 | `:core:ui` | Theme と検証画面用 Scaffold |
-| `:feature:liststability` | List 安定性 / MutableList 共有参照の検証 |
+| `:feature:liststability` | [安定性の問題を修正する](https://developer.android.com/develop/ui/compose/performance/stability/fix?hl=ja) の検証 |
 
 依存方向は `app` → `feature:*` → `core:*` です。
 
@@ -33,34 +33,32 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 3. `:app` の `NavHost` に `composable` を足す
 4. `HomeScreen` の一覧にボタン（カード）を 1 つ足す
 
-## List 安定性検証の見方
+## 初学者向けの図解
 
-メイン画面 → **List 安定性と MutableList 共有参照**。
+- [docs/list-stability.html](docs/list-stability.html)
 
-要素型 `StableItem` は `@Immutable` で Stable です。それでもパラメータの `List<T>` はインタフェースのため Unstable です。実行時の実体が `MutableList` なら、呼び出し元が同じ参照を持っている限り、関数へ渡したあとも外部から中身を変えられます。
+## List 安定性の見方
 
-1. **同一インスタンス** — `identity` と `===` が一致する（コピーされない）
-2. **通知なし変異** — 通常の `MutableList.add` では再 compose しない。`size を再読込` だけ別 state を更新すると、リスト表示は古いまま size だけ新しい値になる。親を再 compose すると `List` 引数の子は skippable ではないので中身が見える
-3. **List 引数 vs @Immutable ラッパ** — 同じ `MutableList` を不安定な `List` と、誤って `@Immutable` にした holder の両方に渡す。親を再 compose すると左側は更新され、右側は skip されて古いままになり得る
-4. **読み取り中の破壊的変更** — `forEach` 中の `add` で `ConcurrentModificationException`、index 参照中の `clear` で `IndexOutOfBoundsException`。例外は composition の外で捕捉して画面に出す。`LazyColumn` の composition 中に別スレッドから同じリストを変えると、同様の例外が Compose runtime まで届いてクラッシュすることがある
-5. **正しい代替** — `mutableStateListOf`、`toList()` コピー、`kotlinx.collections.immutable` の `PersistentList`
+メイン画面 → **List 安定性**。
+
+`Item` は Stable でも、渡している `List<Item>` は Unstable です。中身は変えず **画面を更新** するだけで親を再 compose します。
+
+- **ItemList の compose 回数**が増える → `List` 引数が skip されていない（主題）
+- **各行の回数**は増えないことがある → `Item` が Stable なので行は skip できる
+
+```bash
+./gradlew :app:assembleDebug -Pcompose.strongSkipping=true
+```
+
+Strong Skipping をオンにすると、同じ `List` インスタンスなら `ItemList` も skip されます。
 
 ## Compose compiler reports
-
-`:feature:liststability` は debug ビルドでレポートを出します。
 
 ```bash
 ./gradlew :feature:liststability:compileDebugKotlin
 ```
 
-出力先:
-
 - `feature/liststability/build/compose_reports/liststability_debug-composables.txt`
 - `feature/liststability/build/compose_reports/liststability_debug-classes.txt`
 
-確認したいポイント:
-
-- `StableItem` は `stable class`
-- `UnstableListConsumer` は `unstable items: List<StableItem>` で restartable、**skippable ではない**
-- `MisannotatedHolderConsumer` は `stable holder: ImmutableItemHolder` で **skippable**（`@Immutable` の誤用）
-- `ImmutableListConsumer` は `stable items: ImmutableList<StableItem>` で **skippable**
+Strong Skipping OFF では `ItemList` が `unstable items: List<Item>` で skippable ではありません。

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Compose の安定性を直す — 公式ドキュメントの確認</title>
+  <style>
+    :root {
+      --bg: #f6f3ff;
+      --paper: #ffffff;
+      --ink: #1c1b1f;
+      --muted: #5c5668;
+      --line: #e4dcf4;
+      --brand: #6750a4;
+      --brand-soft: #ece6f8;
+      --ok: #1b7f4e;
+      --ok-soft: #e4f6ec;
+      --bad: #b3261e;
+      --bad-soft: #fce8e6;
+      --warn: #9a4d00;
+      --warn-soft: #fff1dd;
+      --shadow: 0 12px 40px rgba(67, 40, 110, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #efe7ff 0%, transparent 50%),
+        var(--bg);
+      line-height: 1.75;
+    }
+    header.hero, main, footer { max-width: 980px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+    header.hero { padding-top: 48px; }
+    .eyebrow {
+      display: inline-block;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+    h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 16px 0 12px; }
+    h2 { font-size: 22px; margin: 0 0 12px; }
+    p.lead { font-size: 18px; color: var(--muted); }
+    nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 8px; }
+    nav.toc a {
+      text-decoration: none; color: var(--brand); background: var(--paper);
+      border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px;
+    }
+    section.card {
+      background: var(--paper); border: 1px solid var(--line); border-radius: 20px;
+      padding: 28px; margin: 20px 0; box-shadow: var(--shadow);
+    }
+    .ok { background: var(--ok-soft); color: var(--ok); border-radius: 14px; padding: 14px 16px; margin-top: 12px; }
+    .bad { background: var(--bad-soft); color: var(--bad); border-radius: 14px; padding: 14px 16px; margin-top: 12px; }
+    .warn { background: var(--warn-soft); color: var(--warn); border-radius: 14px; padding: 14px 16px; margin-top: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
+    .mini { border: 1px dashed var(--line); border-radius: 14px; padding: 14px; background: #fcfbff; }
+    figure { margin: 20px 0 8px; }
+    figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+    svg.diagram { width: 100%; height: auto; display: block; }
+    pre {
+      background: #1c1b1f; color: #f3eeff; border-radius: 14px; padding: 16px;
+      overflow-x: auto; font-size: 13px; line-height: 1.6;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { border: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
+    th { background: var(--brand-soft); }
+    a { color: var(--brand); }
+    footer { padding: 8px 24px 48px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <span class="eyebrow">公式ドキュメントの実行確認</span>
+    <h1>「安定性の問題を修正する」で何が直るのか</h1>
+    <p class="lead">
+      対象は
+      <a href="https://developer.android.com/develop/ui/compose/performance/stability/fix?hl=ja">Fix stability issues</a>
+      です。確認するのはクラッシュではなく、<strong>親が再 compose したとき、入力が同じなら子を skip できるか</strong>です。
+    </p>
+    <nav class="toc">
+      <a href="#problem">公式の問題</a>
+      <a href="#why">なぜ List は Unstable</a>
+      <a href="#fixes">3 つの直し方</a>
+      <a href="#app">アプリでの見方</a>
+    </nav>
+  </header>
+  <main>
+    <section class="card" id="problem">
+      <h2>公式が直したいこと</h2>
+      <p>
+        Compose は、引数が Stable で前回と同じなら子 Composable を <strong>skip</strong>（再実行しない）できます。
+        <code>List</code> は Unstable なので、親が何か別の理由で再 compose すると、リストの中身が同じでも子が毎回走ります。遅い、が問題です。
+      </p>
+      <figure>
+        <svg class="diagram" viewBox="0 0 920 240" role="img" aria-label="親の再composeで List 引数の子が毎回走る">
+          <rect x="40" y="30" width="240" height="180" rx="16" fill="#ece6f8" stroke="#6750a4"/>
+          <text x="60" y="70" font-size="16" font-weight="700" fill="#6750a4">親</text>
+          <text x="60" y="110" font-size="14">tick だけ +1</text>
+          <text x="60" y="140" font-size="14">リストの中身は同じ</text>
+          <text x="60" y="170" font-size="14">それでも再 compose</text>
+          <path d="M280 120 L360 120" stroke="#6750a4" stroke-width="3"/>
+          <polygon points="360,120 348,114 348,126" fill="#6750a4"/>
+          <rect x="370" y="30" width="510" height="180" rx="16" fill="#fce8e6" stroke="#b3261e"/>
+          <text x="390" y="70" font-size="16" font-weight="700" fill="#b3261e">HighlightedSnacks(list)</text>
+          <text x="390" y="110" font-size="14">List は Unstable → skippable ではない</text>
+          <text x="390" y="145" font-size="16" font-weight="700">compose 回数が増える</text>
+          <text x="390" y="175" font-size="14">公式が直したいパフォーマンス問題</text>
+        </svg>
+        <figcaption>アプリの「親だけ再 compose」ボタンは、この図をそのまま実行します。リストへ add はしません。</figcaption>
+      </figure>
+    </section>
+
+    <section class="card" id="why">
+      <h2>なぜ要素が Stable でも List は Unstable か</h2>
+      <p>
+        診断ページの例は <code>val set: Set = mutableSetOf("foo")</code> です。
+        変数の型は読み取り専用に見えますが、箱の実体は可変です。コンパイラは宣言型しか見ないので、
+        <code>List</code> / <code>Set</code> / <code>Map</code> を Unstable にします。
+      </p>
+      <figure>
+        <svg class="diagram" viewBox="0 0 920 250" role="img" aria-label="List型の付箋とMutableListの箱">
+          <rect x="40" y="30" width="280" height="90" rx="14" fill="#ece6f8"/>
+          <text x="60" y="65" font-size="16">宣言: List&lt;StableItem&gt;</text>
+          <text x="60" y="95" font-size="14" fill="#5c5668">読み取り専用に見える</text>
+          <rect x="40" y="140" width="280" height="80" rx="14" fill="#ece6f8"/>
+          <text x="60" y="175" font-size="16">実体: MutableList</text>
+          <text x="60" y="205" font-size="14" fill="#5c5668">まだ add できる</text>
+          <rect x="420" y="70" width="460" height="120" rx="16" fill="#e8eeff" stroke="#3d5afe" stroke-width="3"/>
+          <text x="440" y="115" font-size="16" font-weight="700" fill="#3d5afe">メモリ上は 1 つの箱</text>
+          <text x="440" y="150" font-size="16">declared === backing → true</text>
+          <path d="M320 75 L420 110" stroke="#c2185b" stroke-width="3"/>
+          <path d="M320 180 L420 150" stroke="#c2185b" stroke-width="3"/>
+        </svg>
+        <figcaption>アプリの「なぜ List は Unstable か」カードが、この同一インスタンスを表示します。</figcaption>
+      </figure>
+      <div class="grid">
+        <div class="mini">
+          <h3>StableItem</h3>
+          <p>公式の Snack。val だけなので Stable。ここは問題ではない。</p>
+        </div>
+        <div class="mini">
+          <h3>List&lt;StableItem&gt;</h3>
+          <p>入れ物がインタフェース。要素が Stable でもパラメータは Unstable。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="fixes">
+      <h2>公式が出している直し方</h2>
+      <p>ドキュメントの順です。アプリも同じ 3 つを並べています。</p>
+      <ol>
+        <li><strong>Strong Skipping</strong> — Unstable 引数でも skippable にするコンパイラモード。Kotlin 2.0.20 からデフォルトオン。このプロジェクトは 2.0.0 なので、<code>-Pcompose.strongSkipping=true</code> で確認する。</li>
+        <li><strong>kotlinx ImmutableList</strong> — 本当に不変なコレクション。コンパイラが Stable と認識する。</li>
+        <li><strong>@Immutable で包む</strong> — <code>data class Holder(val items: List&lt;...&gt;)</code> にアノテーションを付け、List を不変として扱う約束をする。</li>
+      </ol>
+      <table>
+        <thead>
+          <tr>
+            <th>Composable</th>
+            <th>Strong Skipping OFF</th>
+            <th>ON</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>HighlightedSnacks(List)</code></td>
+            <td>回数増える（公式の問題）</td>
+            <td>同じインスタンスなら増えない（公式の最初の修正）</td>
+          </tr>
+          <tr>
+            <td><code>HighlightedImmutableSnacks(ImmutableList)</code></td>
+            <td>増えない</td>
+            <td>増えない</td>
+          </tr>
+          <tr>
+            <td><code>HighlightedSnackCollection(@Immutable)</code></td>
+            <td>増えない</td>
+            <td>増えない</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="ok">成功条件は「親の tick だけ増えて、skip された子の compose 回数が止まっている」ことです。画面の表示テキストが変わる必要はありません。</div>
+    </section>
+
+    <section class="card" id="app">
+      <h2>アプリでの手順</h2>
+      <ol>
+        <li>メイン画面 →「安定性の問題を修正する」</li>
+        <li>Strong Skipping が OFF であることを確認</li>
+        <li>「親だけ再 compose」を何度か押す</li>
+        <li><code>HighlightedSnacks</code> の回数だけ増え、下の 2 つは増えないことを見る</li>
+        <li>レポート: <code>./gradlew :feature:liststability:compileDebugKotlin</code></li>
+        <li>オプション: <code>-Pcompose.strongSkipping=true</code> で入れ直すと、List 側も回数が止まる</li>
+      </ol>
+      <pre><code>./gradlew :app:assembleDebug
+./gradlew :app:assembleDebug -Pcompose.strongSkipping=true</code></pre>
+      <div class="warn">
+        この検証ではリストを破壊的に変更しません。MutableList の共有による例外や古い UI は、公式ページの主題ではないため画面から外しています。
+      </div>
+    </section>
+  </main>
+  <footer>
+    kotlin-verification / :feature:liststability —
+    <a href="https://developer.android.com/develop/ui/compose/performance/stability/fix?hl=ja">developer.android.com の該当ページ</a>
+  </footer>
+</body>
+</html>
